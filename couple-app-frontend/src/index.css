@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+/* 🔥 Animated multi-color gradient background */
+.animated-gradient {
+  background: linear-gradient(120deg,
+    #ff6b6b,
+    #f06595,
+    #845ef7,
+    #5c7cfa,
+    #339af0,
+    #22b8cf,
+    #20c997,
+    #51cf66,
+    #94d82d,
+    #fcc419
+  );
+  background-size: 300% 300%;
+  animation: gradientShift 8s ease infinite;
+}
+
+/* Smooth color transition animation */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  25% { background-position: 50% 100%; }
+  50% { background-position: 100% 50%; }
+  75% { background-position: 50% 0%; }
+  100% { background-position: 0% 50%; }
+}
+
