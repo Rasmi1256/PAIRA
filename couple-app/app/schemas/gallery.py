@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 import uuid
 import enum
@@ -30,6 +30,8 @@ class AlbumUpdate(BaseModel):
 
 
 class AlbumResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str] = None
@@ -39,9 +41,6 @@ class AlbumResponse(BaseModel):
     smart_criteria: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class TagCreate(BaseModel):
@@ -55,14 +54,13 @@ class TagUpdate(BaseModel):
 
 
 class TagResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     user_id: int
     color: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class MediaUpdate(BaseModel):
@@ -74,6 +72,8 @@ class MediaUpdate(BaseModel):
 
 
 class MediaResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     key: str
     file_name: str
@@ -87,9 +87,6 @@ class MediaResponse(BaseModel):
     is_starred: bool
     tags: List[str]
     description: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class GalleryFilterRequest(BaseModel):
@@ -116,12 +113,10 @@ class BulkTagRequest(BaseModel):
 
 
 class GalleryItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
     id: uuid.UUID
     url: str
     type: MediaType
     createdAt: datetime = Field(..., alias="created_at")
-
-    class Config:
-        from_attributes = True
-        populate_by_name = True
 

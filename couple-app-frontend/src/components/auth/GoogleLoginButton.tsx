@@ -16,7 +16,7 @@ interface GoogleLoginButtonProps {
   onClick?: () => void;
 }
 
-export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ text = "Sign in with Google", onClick }) => {
+export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ text = "Sign in with Google" }) => {
   // Define the base URL of your backend.
   // This ensures that API calls are directed to the correct server.
   const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';

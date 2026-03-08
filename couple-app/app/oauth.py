@@ -1,6 +1,7 @@
 import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException
-from jose import JWTError, jwt
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
@@ -43,19 +44,22 @@ async def login_google(
                 status_code=400, detail=f"Failed to exchange code with Google: {e.response.text}"
             )
 
-    id_token = token_json.get("id_token")
-    if not id_token:
+    raw_id_token = token_json.get("id_token")
+    if not raw_id_token:
         raise HTTPException(status_code=400, detail="ID token not found in Google response")
 
+    # Verify the ID-token signature and audience against Google's public keys.
     try:
-        # SECURITY WARNING: In a production app, you MUST verify the token's signature.
-        # This requires fetching Google's public keys.
-        # Disabling signature verification is for development convenience only.
-        payload = jwt.decode(id_token, key="", options={"verify_signature": False, "verify_aud": False})
+        request = google_requests.Request()
+        payload = google_id_token.verify_oauth2_token(
+            raw_id_token,
+            request,
+            settings.GOOGLE_CLIENT_ID,
+        )
         user_email = payload.get("email")
         user_name = payload.get("name")
-    except JWTError:
-        raise HTTPException(status_code=400, detail="Invalid Google ID token")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid Google ID token: {exc}")
 
     if not user_email:
         raise HTTPException(status_code=400, detail="Email not found in Google token payload")

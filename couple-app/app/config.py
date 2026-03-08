@@ -1,8 +1,7 @@
-"""Configuration settings with a resilient import for BaseSettings.
+"""Configuration settings loaded exclusively from environment variables.
 
-Try to import `BaseSettings` from `pydantic_settings` (used by pydantic v2
-settings package). If that import isn't available (older pydantic v1
-installations), fall back to `pydantic.BaseSettings`.
+All secrets MUST be provided via environment variables or a .env file
+(see .env.example).  No secret or credential has a default value here.
 """
 
 try:
@@ -12,26 +11,62 @@ except Exception:
     # fallback for pydantic v1 (or environments without pydantic_settings)
     from pydantic import BaseSettings
 
+from pydantic import ConfigDict
+from typing import List
+
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+psycopg2://couple:couplepass@localhost:5434/coupledb"
-    SECRET_KEY: str = "771d383343e7efbb45f2376491c7a9eb2dab03e8a17fdc1c24b3d88be9208e75"
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # --- Database ---
+    DATABASE_URL: str
+
+    # --- Security ---
+    SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
     ALGORITHM: str = "HS256"
 
-    # Google OAuth
-    GOOGLE_CLIENT_ID: str = "dummy_google_client_id"
-    GOOGLE_CLIENT_SECRET: str ="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" 
-    GOOGLE_REDIRECT_URI: str = "http://localhost:3000/callback"  # Example for a frontend running on port 3000
+    # --- Google OAuth ---
+    GOOGLE_CLIENT_ID: str
+    GOOGLE_CLIENT_SECRET: str
+    GOOGLE_REDIRECT_URI: str
 
-    AWS_S3_BUCKET_NAME: str = "bithuli-bucket"
-    AWS_S3_REGION: str = "ap-south-1"
-    AWS_ACCESS_KEY_ID: str = "AKIA2OAJT44D2BI7RS7Y"
-    AWS_SECRET_ACCESS_KEY: str = "NiD+z0OTa0TCPd1SRuiaiCr9KuPOTflQEu89g7lY"
-    # WebAuthn / Passkeys
-    RP_ID: str = "localhost"  # Relying Party ID (your domain)
-    RP_NAME: str = "CoupleApp"
-    ORIGIN: str = "http://localhost:3000" # The origin of your frontend app
+    # --- AWS S3 ---
+    AWS_S3_BUCKET_NAME: str
+    AWS_S3_REGION: str
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+
+    # --- WebAuthn / Passkeys ---
+    RP_ID: str
+    RP_NAME: str = "PAIRA"
+    ORIGIN: str
+
+    # --- Redis ---
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: str | None = None
+
+    # --- CORS ---
+    # Comma-separated list of allowed origins, e.g.
+    # ALLOWED_ORIGINS=https://paira.app,https://www.paira.app
+    ALLOWED_ORIGINS: str = ""
+
+    # --- TURN / WebRTC (optional) ---
+    TURN_SERVER_URL: str | None = None
+    TURN_USERNAME: str | None = None
+    TURN_CREDENTIAL: str | None = None
+
+    def get_allowed_origins(self) -> List[str]:
+        """Return ALLOWED_ORIGINS as a list, splitting on commas."""
+        if not self.ALLOWED_ORIGINS:
+            return []
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
 
 settings = Settings()

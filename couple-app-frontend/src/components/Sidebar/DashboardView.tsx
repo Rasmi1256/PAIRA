@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import { isAxiosError } from 'axios';
 import { api } from '../../lib/api';
-import { FaUser, FaEnvelope, FaHeart, FaCalendarAlt, FaImages, FaPencilAlt, FaTimes, FaSignOutAlt, FaComments } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaHeart, FaCalendarAlt, FaImages, FaPencilAlt, FaTimes, FaSignOutAlt, FaComments, FaVideo } from 'react-icons/fa';
 
 /* --- Reusable Card Component --- */
 interface DashboardCardProps {
@@ -269,6 +269,21 @@ const DashboardView: React.FC = () => {
                             } else {
                                 // Could show a message or navigate to pairing
                                 alert('You need to connect with your partner first to use the chat feature.');
+                            }
+                        }}
+                    />
+
+                    {/* Video Call Card */}
+                    <DashboardCard
+                        icon={<FaVideo className="h-6 w-6" />}
+                        title="Video Call"
+                        subtitle={user.partnerName ? "Start a video call." : "Connect with partner first."}
+                        iconColor="bg-indigo-100 text-indigo-600"
+                        onClick={() => {
+                            if (user.partnerName) {
+                                navigate('/video-call');
+                            } else {
+                                alert('You need to connect with your partner first to use video call.');
                             }
                         }}
                     />

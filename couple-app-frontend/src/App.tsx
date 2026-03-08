@@ -7,6 +7,9 @@ import SignupPage from './pages/SignupPage'; // Import the actual SignupPage
 import DashboardPage from './pages/DashboardPage'; // Import the actual DashboardPage
 import ChatPage from './pages/ChatPage'; // Import the actual ChatPage
 import PairingPage from './pages/PairingPage'; // Import the actual PairingPage
+import VideoCallPage from './pages/VideoCallPage';
+import VideoCallGlobalListener from './components/VideoCallGlobalListener';
+import JournalView from './components/Sidebar/JournalView'; // Import the JournalView component
 
 // A wrapper for routes that should only be accessible to authenticated users.
 const PrivateRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
@@ -23,13 +26,17 @@ function App() {
   return (
     <AuthProvider>
       <Router>
+        <VideoCallGlobalListener />
         <Routes>
           <Route path="/" element={<LoginPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/messages" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
+          <Route path="/video-call" element={<PrivateRoute><VideoCallPage /></PrivateRoute>} />
           <Route path="/pairing" element={<PrivateRoute><PairingPage /></PrivateRoute>} />
+          <Route path="/journal" element={<PrivateRoute><JournalView /></PrivateRoute>} />
+          
         </Routes>
       </Router>
     </AuthProvider>

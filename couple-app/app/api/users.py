@@ -40,6 +40,36 @@ def generate_signed_url(key: str) -> str:
     )
 
 
+def _populate_user_out_with_partner_data(user: User, db: Session) -> dict:
+    """
+    Helper to build the UserOut response with signed URLs and partner details.
+    """
+    # Generate signed URL for the user's own profile picture
+    if user.profile_picture_url:
+        user.profile_picture_url = generate_signed_url(user.profile_picture_url)
+
+    # Fetch partner details if user is in a couple
+    partner_name = None
+    partner_email = None
+    partner_profile_picture_url = None
+    if user.couple_id:
+        couple = db.query(Couple).filter(Couple.id == user.couple_id).first()
+        if couple:
+            partner_id = couple.user1_id if couple.user2_id == user.id else couple.user2_id
+            if partner_id:
+                partner = db.query(User).filter(User.id == partner_id).first()
+                if partner:
+                    partner_name = partner.full_name
+                    partner_email = partner.email
+                    if partner.profile_picture_url:
+                        partner_profile_picture_url = generate_signed_url(partner.profile_picture_url)
+
+    user_data = user.__dict__.copy()
+    user_data['partnerName'] = partner_name
+    user_data['partnerEmail'] = partner_email
+    user_data['partnerProfilePictureUrl'] = partner_profile_picture_url
+    return user_data
+
 # =========================
 # Update User Profile
 # =========================
@@ -190,3 +220,28 @@ def get_me(
     user_data['partnerEmail'] = partner_email
     user_data['partnerProfilePictureUrl'] = partner_profile_picture_url
     return user_data
+
+
+# =========================
+# Get User by ID (for partners)
+# =========================
+
+@router.get("/{user_id}", response_model=UserOut)
+def get_user_by_id(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Only allow access if the requested user is in the same couple
+    if not current_user.couple_id:
+        raise HTTPException(status_code=403, detail="You must be in a couple to access this endpoint")
+
+    requested_user = db.query(User).filter(User.id == user_id).first()
+    if not requested_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if requested_user.couple_id != current_user.couple_id:
+        raise HTTPException(status_code=403, detail="You can only access information of users in your couple")
+
+    # Return the user data with signed URLs
+    return _populate_user_out_with_partner_data(requested_user, db)

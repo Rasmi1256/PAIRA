@@ -1,0 +1,135 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PAIRA — Production Docker Compose
+#  Usage:  docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+# ═══════════════════════════════════════════════════════════════════════════════
+
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared network — all services talk over this internal bridge
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  paira_net:
+    driver: bridge
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Persistent volumes
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  db_data:
+  redis_data:
+  uploads:
+  static_files:
+
+services:
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    networks: [paira_net]
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # NOT exposed to the host — internal only
+
+  # ─── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [paira_net]
+    # In production always set REDIS_PASSWORD in .env.prod for security.
+    # If left empty, Redis starts without authentication (only safe on private networks).
+    command: sh -c 'if [ -n "$$REDIS_PASSWORD" ]; then redis-server --requirepass "$$REDIS_PASSWORD"; else redis-server; fi'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    # NOT exposed to the host — internal only
+
+  # ─── FastAPI Backend ─────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./couple-app
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks: [paira_net]
+    environment:
+      # ── Database (override .env to hit internal db service) ──────────────────
+      DATABASE_URL: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+
+      # ── Security ─────────────────────────────────────────────────────────────
+      SECRET_KEY: ${SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      ALGORITHM: ${ALGORITHM:-HS256}
+
+      # ── Google OAuth ──────────────────────────────────────────────────────────
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+
+      # ── AWS S3 ────────────────────────────────────────────────────────────────
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
+      AWS_S3_REGION: ${AWS_S3_REGION}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+
+      # ── WebAuthn / Passkeys ───────────────────────────────────────────────────
+      RP_ID: ${RP_ID}
+      RP_NAME: ${RP_NAME:-PAIRA}
+      ORIGIN: ${ORIGIN}
+
+      # ── Redis (service name on internal network) ──────────────────────────────
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      # ── CORS ──────────────────────────────────────────────────────────────────
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+
+      # ── TURN / WebRTC ─────────────────────────────────────────────────────────
+      TURN_SERVER_URL: ${TURN_SERVER_URL:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
+
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads:/app/upload
+      - static_files:/app/static
+    # NOT exposed to the host — Nginx proxies to it
+
+  # ─── Nginx + React Frontend ──────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./couple-app-frontend
+      dockerfile: Dockerfile
+      args:
+        # Vite embeds these at build time — they become part of the JS bundle
+        VITE_API_BASE_URL: /api/v1
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        VITE_BACKEND_URL: ${FRONTEND_ORIGIN}
+    restart: unless-stopped
+    networks: [paira_net]
+    ports:
+      - "80:80"
+      # Uncomment for TLS termination at this container (or use a host-level Nginx/Traefik):
+      # - "443:443"
+    depends_on:
+      - api

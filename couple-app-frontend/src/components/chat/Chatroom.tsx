@@ -2,7 +2,13 @@ import { useState, useRef, useEffect } from "react";
 import { useChat } from "../../hooks/useChat";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
+import SharedGallery from "./SharedGallery"; // <--- Import the Gallery
+import VoiceRecorder from "./VoiceRecorder";
+import VoiceMessageBubble from "./VoiceMessageBubble";
 import { api } from "../../lib/api";
+import { deleteMessage } from "../../api/chat";
+import { voiceMessageApi } from "../../api/voice_message";
+import type { VoiceMessage } from "../../types/voice_message";
 
 interface Props {
   token: string;
@@ -11,27 +17,48 @@ interface Props {
 }
 
 export default function ChatRoom({ token, userId, partnerId }: Props) {
-  const { messages, typingUser, sendMessage, sendTypingStart, sendSeen } =
+  // 1. Destructure sendReaction and removeMessage
+  const { messages, typingUser, sendMessage, sendTypingStart, sendSeen, sendReaction } =
     useChat(token, userId, partnerId);
 
   const [input, setInput] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [showGallery, setShowGallery] = useState(false); // <--- State for Gallery
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [voiceMessages, setVoiceMessages] = useState<VoiceMessage[]>([]);
+  const [galleryRefreshTrigger, _setGalleryRefreshTrigger] = useState(0); // <--- Trigger for gallery refresh
+  
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // 2. Connect the real reaction function
+  const handleReact = (messageId: number, emoji: string) => {
+    sendReaction(messageId, emoji);
+  };
+
+  // Handle message deletion
+  const handleDelete = async (messageId: number) => {
+    try {
+      await deleteMessage(messageId);
+      // Refresh messages after deletion
+      // The useChat hook should handle this via WebSocket or we can trigger a refresh
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+      alert('Failed to delete message. Please try again.');
+    }
+  };
 
   const submit = async () => {
     if (selectedFile) {
       setUploading(true);
       try {
-        // Get presigned URL
         const uploadResponse = await api.post('/uploads/presigned-url', {
           fileName: selectedFile.name,
         });
 
         const { presignedUrl, key } = uploadResponse.data;
 
-        // Upload to S3
         const s3Response = await fetch(presignedUrl, {
           method: 'PUT',
           body: selectedFile,
@@ -42,7 +69,6 @@ export default function ChatRoom({ token, userId, partnerId }: Props) {
 
         if (!s3Response.ok) throw new Error('Failed to upload to S3');
 
-        // Complete upload
         const completeResponse = await api.post('/uploads/complete', {
           key,
           fileName: selectedFile.name,
@@ -52,7 +78,6 @@ export default function ChatRoom({ token, userId, partnerId }: Props) {
 
         const media = completeResponse.data;
 
-        // Send message with media
         sendMessage(input, media.id);
         setInput("");
         setSelectedFile(null);
@@ -80,30 +105,24 @@ export default function ChatRoom({ token, userId, partnerId }: Props) {
 
     const lastMessage = messages[messages.length - 1];
 
-    // If last message belongs to partner and is not marked as seen -> mark seen
     if (lastMessage.sender_id !== userId && lastMessage.status !== "seen") {
-      // Send seen event
-      sendSeen(lastMessage.id);
+      sendSeen(String(lastMessage.id)); // Ensure ID is string
     }
   }, [messages, sendSeen, userId]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type
       const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/quicktime'];
       if (!allowedTypes.includes(file.type)) {
         alert('Please select a valid image, video, or GIF file.');
         return;
       }
-
-      // Validate file size (e.g., max 50MB)
       const maxSize = 50 * 1024 * 1024; // 50MB
       if (file.size > maxSize) {
         alert('File size must be less than 50MB.');
         return;
       }
-
       setSelectedFile(file);
     }
   };
@@ -115,15 +134,93 @@ export default function ChatRoom({ token, userId, partnerId }: Props) {
     }
   };
 
+  const handleVoiceRecordingComplete = async (audioBlob: Blob) => {
+    try {
+      const audioFile = new File([audioBlob], 'voice_message.wav', { type: 'audio/wav' });
+      await voiceMessageApi.createVoiceMessage({
+        receiver_id: partnerId,
+        audio_file: audioFile,
+      });
+      setShowVoiceRecorder(false);
+      // Refresh voice messages
+      const messages = await voiceMessageApi.getVoiceMessages();
+      setVoiceMessages(messages);
+    } catch (error) {
+      console.error('Failed to send voice message:', error);
+      alert('Failed to send voice message. Please try again.');
+    }
+  };
+
+  const handleMarkAsListened = async (voiceMessageId: number) => {
+    try {
+      await voiceMessageApi.updateVoiceMessage(voiceMessageId, {
+        listened_at: new Date().toISOString(),
+      });
+      // Update local state
+      setVoiceMessages(prev =>
+        prev.map(vm =>
+          vm.id === voiceMessageId
+            ? { ...vm, listened_at: new Date().toISOString() }
+            : vm
+        )
+      );
+    } catch (error) {
+      console.error('Failed to mark as listened:', error);
+    }
+  };
+
+  const handleDeleteVoiceMessage = async (voiceMessageId: number) => {
+    try {
+      await voiceMessageApi.deleteVoiceMessage(voiceMessageId);
+      // Remove from local state
+      setVoiceMessages(prev => prev.filter(vm => vm.id !== voiceMessageId));
+    } catch (error) {
+      console.error('Failed to delete voice message:', error);
+      alert('Failed to delete voice message. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    const loadVoiceMessages = async () => {
+      try {
+        const messages = await voiceMessageApi.getVoiceMessages();
+        setVoiceMessages(messages);
+      } catch (error) {
+        console.error('Failed to load voice messages:', error);
+      }
+    };
+    loadVoiceMessages();
+  }, []);
+
   return (
     <div style={styles.wrapper}>
+      {/* 3. Add Header with Gallery Button */}
+      <div style={styles.header}>
+        <h3 style={{ margin: 0 }}>Chat</h3>
+        <button style={styles.galleryButton} onClick={() => setShowGallery(true)}>
+          🖼️ Gallery
+        </button>
+      </div>
+
       <div style={styles.chatBox}>
         {messages.map((m) => (
-          <MessageBubble 
-            key={m.id} 
-            msg={m} 
-            userId={userId} 
-            token={token}  // <--- KEY CHANGE: Passing token to bubble
+          <MessageBubble
+            key={m.id}
+            msg={m}
+            userId={userId}
+            token={token}
+            onReact={handleReact}
+            onDelete={handleDelete}
+          />
+        ))}
+
+        {voiceMessages.map((vm) => (
+          <VoiceMessageBubble
+            key={vm.id}
+            voiceMessage={vm}
+            isOwn={vm.sender_id === userId}
+            onMarkAsListened={handleMarkAsListened}
+            onDelete={handleDeleteVoiceMessage}
           />
         ))}
 
@@ -155,6 +252,14 @@ export default function ChatRoom({ token, userId, partnerId }: Props) {
           📎
         </button>
 
+        <button
+          style={styles.voiceButton}
+          onClick={() => setShowVoiceRecorder(true)}
+          disabled={uploading}
+        >
+          🎤
+        </button>
+
         <input
           style={styles.input}
           value={input}
@@ -174,6 +279,24 @@ export default function ChatRoom({ token, userId, partnerId }: Props) {
           {uploading ? "Uploading..." : "Send"}
         </button>
       </div>
+
+      {/* 4. Render Gallery Overlay */}
+      {showGallery && (
+        <SharedGallery
+            conversationId={messages.length > 0 ? String(messages[0].id) : "0"}
+            token={token}
+            onClose={() => setShowGallery(false)}
+            refreshTrigger={galleryRefreshTrigger}
+        />
+      )}
+
+      {/* Voice Recorder Overlay */}
+      {showVoiceRecorder && (
+        <VoiceRecorder
+          onRecordingComplete={handleVoiceRecordingComplete}
+          onCancel={() => setShowVoiceRecorder(false)}
+        />
+      )}
     </div>
   );
 }
@@ -186,6 +309,29 @@ const styles: Record<string, React.CSSProperties> = {
     height: "90vh",
     display: "flex",
     flexDirection: "column",
+    border: "1px solid #ddd", // Added border for clarity
+    borderRadius: 8,
+    overflow: "hidden"
+  },
+  
+  // New Header Style
+  header: {
+    padding: "10px 15px",
+    background: "#fff",
+    borderBottom: "1px solid #ddd",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    zIndex: 5
+  },
+
+  galleryButton: {
+    padding: "6px 12px",
+    borderRadius: 6,
+    border: "1px solid #ddd",
+    background: "#f9f9f9",
+    cursor: "pointer",
+    fontSize: 14
   },
 
   chatBox: {
@@ -204,9 +350,18 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
     borderTop: "1px solid #ddd",
     alignItems: "center",
+    background: "#fff"
   },
 
   attachButton: {
+    padding: "10px",
+    borderRadius: 6,
+    border: "1px solid gray",
+    background: "#fff",
+    cursor: "pointer",
+  },
+
+  voiceButton: {
     padding: "10px",
     borderRadius: 6,
     border: "1px solid gray",
@@ -238,3 +393,4 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
   },
 };
+

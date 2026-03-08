@@ -10,7 +10,7 @@ interface EditProfileModalProps {
 }
 
 export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onClose }) => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [profilePicture, setProfilePicture] = useState<File | null>(null);
@@ -51,7 +51,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
       // with the correct boundary, which is crucial for the server to parse it.
       const response = await api.post('/users/me/profile-picture', formData);
 
-      const updatedUser = response.data;
+      void response.data; // profile picture URL available in response.data if needed
       toast.success('Profile picture updated successfully!');
       
       // TODO: Update user context with the new profile picture URL from updatedUser
@@ -73,12 +73,10 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
     setIsSaving(true);
 
     try {
-      const response = await api.patch('/users/me', {
+      await api.patch('/users/me', {
         full_name: fullName,
         email
       });
-
-      const data = response.data;
 
       toast.success('Profile updated successfully!');
       // TODO: Update user context with new name/email

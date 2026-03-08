@@ -1,17 +1,25 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 
-# 1. Add a schema for Media so Pydantic knows how to read the object
+# --- Media Schema ---
 class MediaResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     key: str
     file_name: str
     file_type: str
     file_size: int
+    signed_url: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+# --- NEW: Reaction Schema ---
+class ReactionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    emoji: str
 
 class MessageCreate(BaseModel):
     receiver_id: int
@@ -24,15 +32,18 @@ class MessageResponse(BaseModel):
     receiver_id: int
     message_text: Optional[str]
     media_id: Optional[int]
-    
-    # 2. Change 'dict' to 'MediaResponse'
-    media: Optional[MediaResponse] 
+    media: Optional[MediaResponse]
     
     is_read: bool
     created_at: datetime
+    
+    # --- ADDED: Computed Status field ---
+    status: Optional[str] = "sent"
 
-    class Config:
-        from_attributes = True
+    # --- ADDED: List of Reactions ---
+    reactions: List[ReactionResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
 
 class ConversationResponse(BaseModel):
     conversation_id: int

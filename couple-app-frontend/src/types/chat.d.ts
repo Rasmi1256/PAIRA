@@ -8,6 +8,13 @@ export interface ChatMessage {
   receiver_id: number;
   message_text: string;
   created_at: string;
+  status?: string;
+  media?: {
+    id: number;
+    key: string;
+    file_type: string;
+    file_name: string;
+  };
 }
 
 export interface IncomingWSMessage {

@@ -2,7 +2,7 @@ import boto3
 import uuid
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
@@ -39,13 +39,12 @@ class UploadCompleteRequest(BaseModel):
 
 
 class MediaResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     key: str
     file_name: str
     upload_status: UploadStatus
-
-    class Config:
-        from_attributes = True
 
 
 # =========================
@@ -186,28 +185,35 @@ def get_user_from_token(token: str, db: Session) -> User:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
 
-# --- UPDATED ROUTE ---
+from fastapi.responses import RedirectResponse # <--- Import this
+
+# ... (Previous imports: APIRouter, Depends, Query, etc.)
+
 @router.get("/signed-url")
 def get_signed_url(
     key: str,
-    token: str = Query(..., description="JWT Token"), 
+    token: str = Query(..., description="JWT Token"),
     db: Session = Depends(get_db),
 ):
-    # 1. Authenticate
-    get_user_from_token(token, db)
+    # 1. Security: Only allow valid, logged-in users
+    user = get_user_from_token(token, db)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # 2. Check DB
-    media = db.query(Media).filter(Media.key == key).first()
-    if not media:
-        raise HTTPException(status_code=404, detail="File not found")
+    # 2. Strict Check Removed (Safe because filenames are random UUIDs)
+    # This allows the endpoint to serve Voice Messages, Gallery, and Profile Pics.
 
-    # 3. Generate S3 URL
+    # 3. Generate the S3 Secure Link
     s3 = get_s3_client()
-    url = s3.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": settings.AWS_S3_BUCKET_NAME, "Key": key},
-        ExpiresIn=3600,
-    )
+    try:
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": settings.AWS_S3_BUCKET_NAME, "Key": key},
+            ExpiresIn=3600,
+        )
+    except Exception as e:
+        print(f"Error generating URL: {e}")
+        raise HTTPException(status_code=500, detail="Could not sign URL")
 
-    # 4. REDIRECT the browser to the image
-    return RedirectResponse(url=url)
+    # Return the signed URL directly instead of redirecting to avoid CORS issues with audio/video elements
+    return {"signed_url": url}

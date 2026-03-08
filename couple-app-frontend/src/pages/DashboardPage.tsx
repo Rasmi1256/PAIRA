@@ -1,8 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/useAuth";
+import { useNavigate } from "react-router-dom";
+import { videoCallSocket } from "../api/videoCallSocket";
+import { callRingtoneService } from "../api/callRingtoneService";
+import { buildVideoCallWsUrl } from "../api/buildVideoCallWsUrl";
+import IncomingCallModal from "../components/IncomingCallModal";
 import {
-  FaHeart,
-  FaUser,
   FaCalendarAlt,
   FaCog,
   FaImages,
@@ -38,14 +41,61 @@ interface UserProfile {
 
 const DashboardPage: React.FC = () => {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeView, setActiveView] = useState<ViewType>("Dashboard");
-  const [theme, setTheme] = useState<ThemeType>("default");
-  const [userProfile, setUserProfile] = useState<UserProfile>({
+  const [theme, _setTheme] = useState<ThemeType>("default");
+  const [userProfile, _setUserProfile] = useState<UserProfile>({
     name: "Alex",
     profilePictureUrl: "https://via.placeholder.com/150", // Placeholder image
     anniversaryDate: "2020-10-25",
   });
+  const [incomingCallModalOpen, setIncomingCallModalOpen] = useState(false);
+  const [incomingCallData, setIncomingCallData] = useState<{
+    callId: string;
+    callerName: string;
+    callerEmail: string;
+  } | null>(null);
+
+  const handleAcceptCall = () => {
+    if (!incomingCallData) return;
+    callRingtoneService.stop();
+    setIncomingCallModalOpen(false);
+    setIncomingCallData(null);
+    navigate("/video-call");
+  };
+
+  const handleRejectCall = () => {
+    if (!incomingCallData) return;
+    callRingtoneService.stop();
+    videoCallSocket.rejectCall(incomingCallData.callId);
+    setIncomingCallModalOpen(false);
+    setIncomingCallData(null);
+  };
+
+  useEffect(() => {
+    if (!user) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    videoCallSocket.connect(buildVideoCallWsUrl(token));
+
+    const unsubscribeIncoming = videoCallSocket.onIncomingCallEvent(
+      ({ callId, callerId: _callerId }) => {
+        // Assume caller info is available; in real app, fetch from API
+        const callerName = user.partnerName || "Partner";
+        const callerEmail = user.partnerEmail || "";
+        setIncomingCallData({ callId, callerName, callerEmail });
+        setIncomingCallModalOpen(true);
+        callRingtoneService.start();
+      }
+    );
+
+    return () => {
+      unsubscribeIncoming();
+    };
+  }, [user]);
 
   const themeClasses: Record<ThemeType, string> = {
     default: "animated-gradient",
@@ -223,6 +273,17 @@ const DashboardPage: React.FC = () => {
           <MainContent view={viewConfig[activeView].component} />
         </main>
       </div>
+
+      {/* Incoming Call Modal */}
+      {incomingCallModalOpen && incomingCallData && (
+        <IncomingCallModal
+          isOpen={incomingCallModalOpen}
+          callerName={incomingCallData.callerName}
+          callerEmail={incomingCallData.callerEmail}
+          onAccept={handleAcceptCall}
+          onReject={handleRejectCall}
+        />
+      )}
     </div>
   );
 };

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaPlus, FaImages, FaStar, FaHeart, FaClock, FaCalendarAlt } from 'react-icons/fa';
 import { api } from '../../lib/api';
-import { isAxiosError } from 'axios';
-import { Album } from '../../types/gallery';
+import type { Album } from '../../types/gallery';
 
 const AlbumListView: React.FC = () => {
   const [albums, setAlbums] = useState<Album[]>([]);

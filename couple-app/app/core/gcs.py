@@ -51,3 +51,30 @@ def upload_file_to_gcs(file: UploadFile, user_id: str) -> str:
     except ClientError as e:
         print(f"An error occurred during S3 upload: {e}")
         raise HTTPException(status_code=500, detail="Could not upload file.")
+
+
+def upload_audio_bytes_to_gcs(audio_bytes: bytes, user_id: str, filename: str) -> str:
+    if not s3_client or not AWS_S3_BUCKET_NAME or not AWS_REGION:
+        raise HTTPException(status_code=500, detail="AWS S3 is not configured.")
+
+    try:
+        # Ensure the filename has the correct extension for the browser
+        if not filename.endswith('.mp3'):
+            filename += '.mp3'
+            
+        object_name = f"voice/{user_id}/{uuid.uuid4()}_{filename}"
+
+        s3_client.put_object(
+            Bucket=AWS_S3_BUCKET_NAME,
+            Key=object_name,
+            Body=audio_bytes,
+            ContentType='audio/mpeg',
+            # REMOVE ACL='public-read' if your bucket uses CloudFront or IAM policies
+            # ACL='public-read' 
+        )
+
+        # Use the standard S3 URL format
+        return f"https://{AWS_S3_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{object_name}"
+    except ClientError as e:
+        print(f"S3 Error: {e}")
+        raise HTTPException(status_code=500, detail="Could not upload audio file.")

@@ -14,18 +14,7 @@ const GalleryView: React.FC = () => {
     const [togglingStar, setTogglingStar] = useState<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-
-    const getFullMediaUrl = (relativeUrl?: string) => {
-        if (!relativeUrl) return '';
-        if (relativeUrl.startsWith('http')) return relativeUrl;
-        try {
-            return new URL(relativeUrl, BACKEND_URL).href;
-        } catch (error) {
-            console.error('Error constructing full media URL:', error);
-            return '';
-        }
-    };
+    const BACKEND_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'; void BACKEND_URL; // reserved for future signed-URL fallback
 
     const fetchGalleryItems = async () => {
         setIsLoading(true);

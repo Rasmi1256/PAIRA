@@ -14,14 +14,17 @@ def create_couple(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    couple = Couple(name=payload.name)
+    if current_user.couple_id:
+        raise HTTPException(status_code=400, detail="User is already in a couple")
+
+    # The creator becomes user1; user2_id stays NULL until a partner accepts the invite.
+    couple = Couple(name=payload.name, user1_id=current_user.id)
     db.add(couple)
-    db.commit()
-    db.refresh(couple)
+    db.flush()  # get the couple.id without a full commit
 
     current_user.couple_id = couple.id
-    db.add(current_user)
     db.commit()
+    db.refresh(couple)
 
     return couple
 
@@ -37,7 +40,7 @@ def get_my_couple(
     if not current_user.couple_id:
         raise HTTPException(status_code=404, detail="User is not in a couple")
 
-    couple = db.query(Couple).get(current_user.couple_id)
+    couple = db.query(Couple).filter(Couple.id == current_user.couple_id).first()
 
     if not couple:
         raise HTTPException(status_code=404, detail="Couple not found")
@@ -54,7 +57,7 @@ def get_couple(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    couple = db.query(Couple).get(couple_id)
+    couple = db.query(Couple).filter(Couple.id == couple_id).first()
 
     if not couple:
         raise HTTPException(status_code=404, detail="Couple not found")

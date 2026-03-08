@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import axios from "axios";
 import { AuthContext, type User } from "./useAuth";
 import { api } from "../lib/api"; // Import the configured axios instance

@@ -5,6 +5,8 @@ psycopg2-binary
 python-jose
 passlib[bcrypt]
 pydantic[email]
+pydantic_settings
+python-dotenv
 alembic
 bcrypt==3.2.0
 pytest
@@ -12,9 +14,15 @@ httpx
 pytest
 python-multipart
 requests
-pydantic_settings
 google-auth
 google-auth-oauthlib
 google-cloud-storage
+pydub
+boto3
+redis
+
+
+
+
 
 

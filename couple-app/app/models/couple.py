@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint, CheckConstraint
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship
 from app.db.base_class import Base
 
@@ -8,14 +8,19 @@ class Couple(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=True)
+    anniversary_date = Column(Date, nullable=True)
 
     user1_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    user2_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # user2_id is NULL until a partner accepts the invite
+    user2_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-    # Ensure same couple pair cannot exist twice
+    # Prevent a user from being paired with themselves (ignore while user2 is pending)
     __table_args__ = (
         UniqueConstraint('user1_id', 'user2_id', name='unique_couple_pair'),
-        CheckConstraint('user1_id != user2_id', name='prevent_self_couple')
+        CheckConstraint(
+            'user2_id IS NULL OR user1_id != user2_id',
+            name='prevent_self_couple'
+        ),
     )
 
     # Relationships
@@ -32,3 +37,6 @@ class Couple(Base):
 
     # One couple → Many media
     media = relationship("Media", back_populates="couple")
+
+    # One couple → Many calendar events
+    calendar_events = relationship("CalendarEvent", back_populates="couple")

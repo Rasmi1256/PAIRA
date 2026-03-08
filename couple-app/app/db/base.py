@@ -11,5 +11,11 @@ from app.models.webauthn_credential import WebAuthnCredential
 from app.chat.models import ChatConversation, Message
 
 
+
 from app.models.media import Media
+from app.models.calendar import CalendarEvent
+from app.models.gallery import Album, Tag
+from app.models.pairing import PairingCode
+from app.models.journal import JournalEntry, JournalAttachment
+from app.models.video_call import VideoCall
 
