@@ -19,7 +19,8 @@ const VideoCallGlobalListener: React.FC = () => {
 
     const unsubscribeIncoming =
       videoCallSocket.onIncomingCallEvent(() => {
-        if (location.pathname !== "/video-call") {
+        // Skip navigation when on dashboard — it has its own IncomingCallModal
+        if (location.pathname !== "/video-call" && location.pathname !== "/dashboard") {
           navigate("/video-call");
         }
       });
